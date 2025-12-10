@@ -1,0 +1,154 @@
+---
+title: "Predict Number of Rings Produced By Abalone"
+author: "Huiting Wu"
+format: 
+  html:
+    self-contained: true
+---
+
+```{r message=FALSE, warning=FALSE}
+# load packages
+library(tidyverse)
+library(rpart)
+library(randomForest)
+library(vip)
+```
+
+```{r}
+library(AppliedPredictiveModeling)
+data("abalone")
+```
+
+# Exporatory Data Analysis
+
+```{r}
+summary(abalone)
+```
+
+-   There are 1307 of female type, 1342 infant type, and 1528 male type. The average rings of abalone is around 10. The minimum rings of abalone in the data is 1 and the maximum rings of abalone is 29.
+
+```{r}
+str(abalone)
+```
+
+-   The variable Type is a factor. The response variable, Rings, is integers and other predictors are numerical.
+
+```{r}
+par(mfrow = c(2, 4))
+plot(Rings~., data = abalone, cex = 0.5)
+```
+
+-   The infant type abalone has the lowest number of rings on average and the female and male type have about the same amount of rings on average. The relationship of response variable, Rings, with the predictors are all non-linear positive. The variable Height has the strongest positive relationship with the response variable, Rings.
+
+# Cross-Validation
+
+
+```{r}
+set.seed(452)
+n <- nrow(abalone)
+train_index <- sample(1:n, round(0.7*n))
+train <- abalone[train_index, ]
+test <- abalone[-train_index, ]
+```
+
+
+```{r}
+f1 <- lm(Rings ~., data = train)
+summary(f1)
+```
+
+```{r}
+f2 <- rpart(Rings ~., data = train, method = "anova")
+par(cex = 0.7, xpd = NA)
+plot(f2)
+text(f2, use.n = TRUE)
+```
+
+
+```{r}
+f3 <- randomForest(Rings ~., data = train, importance = TRUE)
+```
+
+```{r}
+vip(f3, num_features = 10, geom = "point", include_type = TRUE)
+```
+
+
+```{r}
+MLR_pred <- predict(f1, newdata = test)
+Regression_pred <- predict(f2, newdata = test)
+RF_pred <- predict(f3, newdata = test)
+```
+
+```{r}
+actual_pred_table <- data.frame(
+  Actual = test$Rings,
+  MLR_Prediction = MLR_pred,
+  Regression_Prediction = Regression_pred,
+  RandomForest_Prediction = RF_pred
+)
+```
+
+```{r}
+RMSE <- function(y, y_hat) {
+sqrt(mean((y - y_hat)^2))
+}
+```
+
+```{r}
+RMSE(actual_pred_table$Actual, actual_pred_table$MLR_Prediction)
+RMSE(actual_pred_table$Actual, actual_pred_table$Regression_Prediction)
+rf_RMSE <- RMSE(actual_pred_table$Actual, actual_pred_table$RandomForest_Prediction)
+rf_RMSE
+```
+
+```{r}
+cor(actual_pred_table$Actual, actual_pred_table$MLR_Prediction)^2
+cor(actual_pred_table$Actual, actual_pred_table$Regression_Prediction)^2
+r2 <- cor(actual_pred_table$Actual, actual_pred_table$RandomForest_Prediction)^2
+r2
+```
+
+| Models                     | RMSE  | $R^2$ |
+|----------------------------|-------|-------|
+| Multiple Linear Regression | 2.107 | 0.57  |
+| Regression Tree            | 2.369 | 0.47  |
+| Random Forest              | `r round(rf_RMSE, 3)` | `r round(r2, 3)`  |
+
+* According to RMSE, the random forest model has the best predictive performance.
+
+* According to the $R^2$, it is also the random forest model has the best predictive performance.
+
+* Overall, the random forest model has the best performance and the regression tree has the worst predictive performance.
+
+
+```{r}
+ggplot(actual_pred_table, aes(x = Actual, y = MLR_Prediction)) + 
+  geom_point(alpha = 0.5) +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  xlab("Acutal Number of Rings") +
+  ylab("MLR Predicted Number of Rings") +
+  ggtitle("Multiple Linear Regression")
+```
+
+```{r}
+ggplot(actual_pred_table, aes(x = Actual, y = Regression_Prediction)) + 
+  geom_point(alpha = 0.5) +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  xlab("Acutal Number of Rings") +
+  ylab("Regression Predicted Number of Rings") +
+  ggtitle("Regression Tree") +
+  ylim(0, 20)
+```
+
+```{r}
+ggplot(actual_pred_table, aes(x = Actual, y = RandomForest_Prediction)) + 
+  geom_point(alpha = 0.5) +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  xlab("Acutal Number of Rings") +
+  ylab("RF Predicted Number of Rings") +
+  ggtitle("Random Forest") +
+  ylim(0, 20)
+```
+
+-   The regression tree might overfit the training data so that the patterns in the plot of the predicted versus actual values for the regression tree model look different than the random forest and linear regression models.
